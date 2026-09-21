@@ -1,0 +1,4 @@
+<Solution>
+  <Project Path="Chomin.Api.Tests/Chomin.Api.Tests.csproj" />
+  <Project Path="Chomin.Api/Chomin.Api.csproj" />
+</Solution>

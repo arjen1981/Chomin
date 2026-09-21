@@ -1,0 +1,23 @@
+{
+  "name": "chomin-frontend",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Mobile-first PWA that translates Japanese RPG dialogue seen through the iPhone camera into spoken English.",
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc --noEmit && vite build",
+    "preview": "vite preview",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "typecheck": "tsc --noEmit"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.2",
+    "jsdom": "^25.0.1",
+    "typescript": "^5.7.2",
+    "vite": "^7.0.0",
+    "vite-plugin-pwa": "^1.0.0",
+    "vitest": "^3.0.0"
+  }
+}
