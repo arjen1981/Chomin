@@ -11,6 +11,7 @@ function callbacks() {
     onManualSubmit: vi.fn(),
     onAcknowledgeCloud: vi.fn(),
     onDeclineCloud: vi.fn(),
+    onRoiChange: vi.fn(),
   };
 }
 
@@ -58,5 +59,54 @@ describe('view', () => {
     expect(disclosure.classList.contains('hidden')).toBe(false);
     view.hideDisclosure();
     expect(disclosure.classList.contains('hidden')).toBe(true);
+  });
+});
+
+describe('view ROI', () => {
+  function sizedView() {
+    const cb = callbacks();
+    const view = createView(cb);
+    const stage = view.root.querySelector('.stage') as HTMLElement;
+    Object.defineProperty(stage, 'clientWidth', { value: 1000 });
+    Object.defineProperty(stage, 'clientHeight', { value: 500 });
+    const roi = view.root.querySelector('.roi') as HTMLElement;
+    return { cb, roi, handle: roi.querySelector('.roi-handle') as HTMLElement };
+  }
+
+  // jsdom lacks PointerEvent; a MouseEvent carrying a pointerId is equivalent here.
+  function pointer(type: string, x: number, y: number): Event {
+    const e = new MouseEvent(type, { bubbles: true, clientX: x, clientY: y });
+    return Object.assign(e, { pointerId: 1 });
+  }
+
+  function drag(target: HTMLElement, from: [number, number], to: [number, number]) {
+    target.dispatchEvent(pointer('pointerdown', ...from));
+    target.dispatchEvent(pointer('pointermove', ...to));
+    target.dispatchEvent(pointer('pointerup', ...to));
+  }
+
+  it('starts at the default region', () => {
+    const { roi } = sizedView();
+    expect(roi.style.left).toBe('8%');
+    expect(roi.style.top).toBe('62%');
+  });
+
+  it('moves the region when the box is dragged', () => {
+    const { cb, roi } = sizedView();
+    drag(roi, [500, 400], [450, 350]); // 5% left, 10% up
+    const next = cb.onRoiChange.mock.calls[0][0];
+    expect(next.x).toBeCloseTo(0.03);
+    expect(next.y).toBeCloseTo(0.52);
+    expect(next.width).toBeCloseTo(0.84);
+    expect(parseFloat(roi.style.left)).toBeCloseTo(3);
+  });
+
+  it('resizes the region when the corner handle is dragged', () => {
+    const { cb, handle } = sizedView();
+    drag(handle, [920, 460], [820, 435]); // 10% narrower, 5% shorter
+    const next = cb.onRoiChange.mock.calls[0][0];
+    expect(next.x).toBeCloseTo(0.08);
+    expect(next.width).toBeCloseTo(0.74);
+    expect(next.height).toBeCloseTo(0.25);
   });
 });

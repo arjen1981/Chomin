@@ -71,6 +71,52 @@ describe('WebSpeechService', () => {
     expect(texts.filter((t) => t === 'Thank you.').length).toBe(2);
   });
 
+  it('unlocks with a non-empty, silent utterance only once', () => {
+    const synth = fakeSynth();
+    const svc = new WebSpeechService(synth);
+    svc.unlock();
+    svc.unlock();
+    expect(synth.spoken).toHaveLength(1);
+    expect(synth.spoken[0].text.length).toBeGreaterThan(0);
+    expect(synth.spoken[0].volume).toBe(0);
+  });
+
+  it('keeps speaking later lines when the engine never reports the end', async () => {
+    vi.useFakeTimers();
+    try {
+      const synth = fakeSynth();
+      (synth.speak as unknown as ReturnType<typeof vi.fn>).mockImplementation(
+        (u: FakeUtterance) => synth.spoken.push(u), // never fires onend
+      );
+      const log = vi.fn();
+      const svc = new WebSpeechService(synth, log);
+
+      svc.speak('First.');
+      svc.speak('Second.');
+      expect(synth.spoken.map((u) => u.text)).toEqual(['First.']);
+
+      await vi.advanceTimersByTimeAsync(10_000);
+
+      expect(synth.spoken.map((u) => u.text)).toEqual(['First.', 'Second.']);
+      expect(log).toHaveBeenCalledWith(expect.stringContaining('no end event'));
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('reports speech errors to the diagnostics log', () => {
+    const synth = fakeSynth();
+    (synth.speak as unknown as ReturnType<typeof vi.fn>).mockImplementation(
+      (u: FakeUtterance & { onerror: ((e: unknown) => void) | null }) => {
+        synth.spoken.push(u);
+        u.onerror?.({ error: 'not-allowed' });
+      },
+    );
+    const log = vi.fn();
+    new WebSpeechService(synth, log).speak('Wait!');
+    expect(log).toHaveBeenCalledWith('speech: error not-allowed');
+  });
+
   it('clamps speech rate to a supported range', () => {
     const synth = fakeSynth();
     const svc = new WebSpeechService(synth);

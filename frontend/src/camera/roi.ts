@@ -22,6 +22,53 @@ export function clampRoi(roi: Roi): Roi {
   };
 }
 
+/** Smallest ROI side (fraction of the display) the user can resize to. */
+export const MIN_ROI_SIZE = 0.05;
+
+/** Move the ROI by a fractional offset, keeping it fully inside the frame. */
+export function moveRoi(roi: Roi, dx: number, dy: number): Roi {
+  return {
+    ...roi,
+    x: clamp(roi.x + dx, 0, 1 - roi.width),
+    y: clamp(roi.y + dy, 0, 1 - roi.height),
+  };
+}
+
+/** Resize the ROI from its bottom-right corner, within the frame and a minimum size. */
+export function resizeRoi(roi: Roi, dw: number, dh: number): Roi {
+  return {
+    ...roi,
+    width: clamp(roi.width + dw, MIN_ROI_SIZE, 1 - roi.x),
+    height: clamp(roi.height + dh, MIN_ROI_SIZE, 1 - roi.y),
+  };
+}
+
+export interface Size {
+  readonly width: number;
+  readonly height: number;
+}
+
+/**
+ * Convert an ROI drawn over the preview (fractions of the display box) into
+ * fractions of the camera frame. The preview uses `object-fit: cover`, so the
+ * frame is scaled to fill the box and its overflow is cropped equally on both
+ * sides; this undoes that so OCR sees exactly what the overlay shows.
+ */
+export function displayToFrameRoi(roi: Roi, display: Size, frame: Size): Roi {
+  if (display.width <= 0 || display.height <= 0 || frame.width <= 0 || frame.height <= 0) {
+    return clampRoi(roi);
+  }
+  const scale = Math.max(display.width / frame.width, display.height / frame.height);
+  const offsetX = (frame.width * scale - display.width) / 2;
+  const offsetY = (frame.height * scale - display.height) / 2;
+  return clampRoi({
+    x: (roi.x * display.width + offsetX) / scale / frame.width,
+    y: (roi.y * display.height + offsetY) / scale / frame.height,
+    width: (roi.width * display.width) / scale / frame.width,
+    height: (roi.height * display.height) / scale / frame.height,
+  });
+}
+
 /** Extract only the ROI sub-rectangle from a source image. */
 export function cropRegion(source: ImageLike, roi: Roi): ImageLike {
   const r = clampRoi(roi);
@@ -39,5 +86,9 @@ export function cropRegion(source: ImageLike, roi: Roi): ImageLike {
 }
 
 function clamp01(v: number): number {
-  return Math.max(0, Math.min(1, v));
+  return clamp(v, 0, 1);
+}
+
+function clamp(v: number, min: number, max: number): number {
+  return Math.max(min, Math.min(max, v));
 }

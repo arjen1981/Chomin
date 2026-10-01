@@ -37,3 +37,9 @@ Thumbs.db
 coverage/
 *.trx
 TestResults/
+
+# Generated Tesseract assets (copied from node_modules)
+frontend/public/tesseract/
+
+# Claude Code personal settings (team settings in .claude/settings.json stay tracked)
+.claude/settings.local.json

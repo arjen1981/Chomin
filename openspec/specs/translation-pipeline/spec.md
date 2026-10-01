@@ -1,10 +1,10 @@
-# Spec Delta
+# translation-pipeline Specification
 
 ## Purpose
 
 Orchestrates the processing stages — capture, OCR, deduplication, translation, and speech — into a single flow, exposing processing state to the UI and managing an ordered speech queue.
 
-## ADDED Requirements
+## Requirements
 
 ### Requirement: Staged pipeline orchestration
 
@@ -19,6 +19,11 @@ The system SHALL connect the stages in order — camera capture → OCR → dedu
 
 - **WHEN** deduplication marks a recognized line as a duplicate
 - **THEN** the orchestrator does not translate or speak it again
+
+#### Scenario: Manual text input
+
+- **WHEN** the user enters Japanese text manually
+- **THEN** the text skips OCR and flows through deduplication, translation, display, and speech like recognized text
 
 ### Requirement: Processing state indication
 

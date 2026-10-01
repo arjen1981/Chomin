@@ -1,9 +1,14 @@
 /// <reference types="vitest/config" />
 import { defineConfig } from 'vite';
 import { VitePWA } from 'vite-plugin-pwa';
+import basicSsl from '@vitejs/plugin-basic-ssl';
 
 export default defineConfig({
+  server: {
+    host: true,
+  },
   plugins: [
+    basicSsl(),
     VitePWA({
       registerType: 'autoUpdate',
       includeAssets: ['icons/icon-192.png', 'icons/icon-512.png'],
@@ -35,6 +40,18 @@ export default defineConfig({
       },
       workbox: {
         globPatterns: ['**/*.{js,css,html,ico,png,svg,webmanifest}'],
+        // OCR assets are large; cache them on first use instead of precaching.
+        globIgnores: ['tesseract/**'],
+        runtimeCaching: [
+          {
+            urlPattern: ({ url }) => url.pathname.includes('/tesseract/'),
+            handler: 'CacheFirst',
+            options: {
+              cacheName: 'tesseract-assets',
+              expiration: { maxEntries: 10 },
+            },
+          },
+        ],
       },
     }),
   ],

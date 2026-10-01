@@ -10,7 +10,8 @@ This first change delivers the **Phase 1 MVP vertical slice** (camera → text �
 
 - Introduce a mobile-first, installable PWA (TypeScript + Vite) whose primary surface is a live camera preview with an adjustable region-of-interest.
 - Provide camera access via `getUserMedia()` with a frame-sampling loop (not per-frame OCR) tuned for latency, CPU/GPU, and battery.
-- Define an **OCR abstraction** with a swappable MVP implementation (manual/mock text entry or a temporary provider) so real Japanese OCR can be dropped in later.
+- Define an **OCR abstraction** with an on-device Japanese implementation (Tesseract.js, lazy-loaded, with image preprocessing tuned for camera-captured screen text) plus a mock implementation for tests and manual text entry; the engine stays swappable for a stronger model later.
+- Add a **recognition stability gate** and low-confidence rejection so OCR jitter from live camera frames does not reach translation.
 - Define a **translation abstraction** (JA→EN) with a swappable MVP implementation (temporary translation API), designed to preserve names, terminology, tone, and personality, and to return only English dialogue.
 - Add **dialogue deduplication** based on normalized OCR output so unchanged text is not re-OCR'd, re-translated, or re-spoken.
 - Define a **speech abstraction** with a Web Speech API (`SpeechSynthesis`) MVP that speaks **only English**, with enable/disable, replay, rate, and voice selection.
@@ -18,7 +19,7 @@ This first change delivers the **Phase 1 MVP vertical slice** (camera → text �
 - Add an **optional ASP.NET Core backend** that provides a cloud translation fallback; the core experience must not require it.
 - Establish explicit **Local vs Cloud privacy modes** — camera-derived data must never leave the device silently.
 
-Non-goals for this change: game knowledge base, character/terminology database, on-device ML models, native iOS app, accounts/payments/persistent databases.
+Non-goals for this change: game knowledge base, character/terminology database, selecting final on-device ML models (beyond the Tesseract.js OCR baseline), native iOS app, accounts/payments/persistent databases.
 
 ## Capabilities
 

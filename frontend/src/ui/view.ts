@@ -1,5 +1,6 @@
 import type { PrivacyMode, ProcessingState } from '../core/types';
 import type { SpeechVoice } from '../services/speech/SpeechService';
+import { DEFAULT_ROI, moveRoi, resizeRoi, type Roi } from '../camera/roi';
 
 export interface ViewCallbacks {
   onToggleSpeech(): void;
@@ -10,6 +11,8 @@ export interface ViewCallbacks {
   onManualSubmit(text: string): void;
   onAcknowledgeCloud(): void;
   onDeclineCloud(): void;
+  /** The user finished moving/resizing the ROI (fractions of the preview box). */
+  onRoiChange(roi: Roi): void;
 }
 
 export interface View {
@@ -25,6 +28,10 @@ export interface View {
   showDisclosure(): void;
   hideDisclosure(): void;
   showCameraError(message: string): void;
+  setDebug(text: string): void;
+  /** Latest speech/pipeline diagnostic (unlock, speaking, errors). */
+  setSpeechDebug(text: string): void;
+  setDebugImage(canvas: HTMLCanvasElement): void;
 }
 
 function el<K extends keyof HTMLElementTagNameMap>(
@@ -47,6 +54,42 @@ export function createView(cb: ViewCallbacks): View {
   const canvas = el('canvas', 'capture-canvas');
 
   const roi = el('div', 'roi');
+  const roiHandle = el('div', 'roi-handle');
+  roi.append(roiHandle);
+  let roiValue: Roi = DEFAULT_ROI;
+  const renderRoi = () => {
+    roi.style.left = `${roiValue.x * 100}%`;
+    roi.style.top = `${roiValue.y * 100}%`;
+    roi.style.width = `${roiValue.width * 100}%`;
+    roi.style.height = `${roiValue.height * 100}%`;
+  };
+  renderRoi();
+
+  // Drag the box to move it; drag the corner handle to resize it.
+  roi.addEventListener('pointerdown', (e) => {
+    const resizing = e.target === roiHandle;
+    const start = { x: e.clientX, y: e.clientY, roi: roiValue };
+    const box = { width: stage.clientWidth, height: stage.clientHeight };
+    if (box.width <= 0 || box.height <= 0) return;
+    e.preventDefault();
+    roi.setPointerCapture?.(e.pointerId);
+
+    const onMove = (ev: PointerEvent) => {
+      const dx = (ev.clientX - start.x) / box.width;
+      const dy = (ev.clientY - start.y) / box.height;
+      roiValue = resizing ? resizeRoi(start.roi, dx, dy) : moveRoi(start.roi, dx, dy);
+      renderRoi();
+    };
+    const onUp = () => {
+      roi.removeEventListener('pointermove', onMove);
+      roi.removeEventListener('pointerup', onUp);
+      roi.removeEventListener('pointercancel', onUp);
+      cb.onRoiChange(roiValue);
+    };
+    roi.addEventListener('pointermove', onMove);
+    roi.addEventListener('pointerup', onUp);
+    roi.addEventListener('pointercancel', onUp);
+  });
 
   const cameraError = el('div', 'camera-error hidden');
 
@@ -136,6 +179,18 @@ export function createView(cb: ViewCallbacks): View {
   const panel = el('div', 'panel');
   panel.append(textPanel, controls, manual);
 
+  // Debug: live raw OCR read + preprocessed preview (helps tune screen OCR).
+  const debugText = el('div', 'debug-text');
+  debugText.textContent = 'OCR debug: (waiting…)';
+  const speechDebugText = el('div', 'debug-text');
+  speechDebugText.textContent = 'speech: (tap anywhere once to enable audio)';
+  const debugImageHolder = el('div', 'debug-image');
+  const debug = el('details', 'debug');
+  const debugSummary = el('summary');
+  debugSummary.textContent = 'Debug';
+  debug.append(debugSummary, debugText, speechDebugText, debugImageHolder);
+  panel.append(debug);
+
   root.append(stage, panel, disclosure);
 
   return {
@@ -167,5 +222,8 @@ export function createView(cb: ViewCallbacks): View {
       cameraError.textContent = message;
       cameraError.classList.remove('hidden');
     },
+    setDebug: (text) => (debugText.textContent = text),
+    setSpeechDebug: (text) => (speechDebugText.textContent = text),
+    setDebugImage: (canvas) => debugImageHolder.replaceChildren(canvas),
   };
 }

@@ -70,4 +70,26 @@ describe('TranslationPipeline', () => {
     expect(states).toEqual(['recognizing', 'translating', 'speaking', 'idle']);
     expect(pipeline.getState()).toBe('idle');
   });
+
+  it('exposes the recognizing state for OCR-only recognition', async () => {
+    const f = fakeServices('やあ');
+    const pipeline = new TranslationPipeline(f.services);
+    const states: ProcessingState[] = [];
+    pipeline.onState((s) => states.push(s));
+
+    const result = await pipeline.recognize(region());
+
+    expect(result).toEqual({ text: 'やあ', confidence: 0.9 });
+    expect(states).toEqual(['recognizing', 'idle']);
+    expect(f.translation.translate).not.toHaveBeenCalled();
+  });
+
+  it('returns to idle when OCR fails', async () => {
+    const f = fakeServices('');
+    f.ocr.recognize.mockRejectedValueOnce(new Error('boom'));
+    const pipeline = new TranslationPipeline(f.services);
+
+    await expect(pipeline.recognize(region())).rejects.toThrow('boom');
+    expect(pipeline.getState()).toBe('idle');
+  });
 });

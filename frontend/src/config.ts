@@ -9,12 +9,18 @@ export interface AppConfig {
   backendEndpoint?: string;
   /** Frame sampling interval in milliseconds. */
   samplingIntervalMs: number;
+  /** Minimum OCR confidence (0..1) before a recognition is considered. */
+  minOcrConfidence: number;
+  /** Consecutive similar OCR reads required before accepting a line. */
+  ocrStabilityFrames: number;
   /** Deduplication tuning. */
   dedup: DeduplicatorConfig;
 }
 
 export const DEFAULT_CONFIG: AppConfig = {
   mode: 'local',
-  samplingIntervalMs: 350,
+  samplingIntervalMs: 500,
+  minOcrConfidence: 0.35,
+  ocrStabilityFrames: 3,
   dedup: DEFAULT_DEDUP_CONFIG,
 };

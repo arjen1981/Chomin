@@ -67,4 +67,21 @@
 ## 12. End-to-end validation
 
 - [x] 12.1 Run the full unit and integration suite and verify all tests pass with `npm test`
-- [ ] 12.2 Manually validate on iPhone Safari: install to home screen, grant camera, point at a Japanese RPG line, see Japanese + English, hear English spoken, and confirm the same line is not re-spoken while on screen
+- [x] 12.2 Manually validate on iPhone Safari: install to home screen, grant camera, point at a Japanese RPG line, see Japanese + English, hear English spoken, and confirm the same line is not re-spoken while on screen (translation quality is out of scope for this change; improving it is a follow-up change)
+
+## 13. On-device OCR
+
+- [x] 13.1 Implement `TesseractOcrService` (Tesseract.js `jpn`, lazy-loaded worker, PSM 3, whitespace stripped, confidence 0..1) and wire it as the default OCR in the app
+- [x] 13.2 Implement OCR image preprocessing (upscale to target height, grayscale, percentile contrast stretch, invert dark backgrounds)
+- [x] 13.3 Implement the recognition stability gate (N consecutive similar reads, emit once) and verify unit tests for jitter, fuzzy slips, single emission, and empty input
+- [x] 13.4 Reject live readings below the minimum confidence or shorter than 2 characters, resetting the stability gate
+- [x] 13.5 Replace frame-diff gating in the camera loop with a busy guard so recognitions never overlap; sampling interval 500 ms
+- [x] 13.6 Route manual text input through `processText` (skip OCR, keep dedup/translation/speech)
+- [x] 13.7 Add a collapsible OCR debug panel (raw reading, confidence, preprocessed image)
+- [x] 13.8 Serve the dev server over HTTPS on the LAN so the iPhone grants camera access
+- [x] 13.9 Bundle/cache the Tesseract worker, core, and `jpn` language data locally so OCR works offline and makes no CDN requests in Local mode
+- [x] 13.10 Add unit tests for `preprocessForOcr` and a contract test for `TesseractOcrService` with a faked worker
+- [x] 13.11 Make the region-of-interest adjustable by the user (currently fixed to the default band; see 7.4)
+- [x] 13.12 Remove or re-enable the unused frame-diff path (`hasChanged`, `config.frameDiffThreshold`) and fix the preprocessing comment that mentions Otsu binarization
+- [x] 13.13 Show the `recognizing` processing state during live OCR (OCR currently runs outside the pipeline)
+- [x] 13.14 Make iOS speech robust: unlock audio on touchend/click with a non-empty silent utterance, resume a paused engine, keep a reference to the active utterance, skip a line via watchdog when no end event arrives, refresh voices on `voiceschanged`, and show speech/pipeline errors in the debug panel

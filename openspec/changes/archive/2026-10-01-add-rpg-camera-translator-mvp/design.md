@@ -16,7 +16,7 @@ The specs in this change define the behavioral contracts for eight capabilities:
 - Provide a measurable path (benchmarks, model candidates) toward fully local, offline processing.
 
 **Non-Goals (design-level):**
-- No on-device ML models shipped in this change (Phase 5).
+- No final on-device model selection in this change (Phase 5). Exception: Tesseract.js ships as the on-device OCR baseline (D10) so the camera path works end-to-end; it remains swappable.
 - No automatic text-region detection in this change; the user positions a region-of-interest (Phase 3 automates it).
 - No game knowledge base, terminology DB, accounts, payments, or persistent server storage.
 - No native iOS app.
@@ -38,10 +38,12 @@ Implementations are selected at composition root (a small factory keyed by mode/
 ### D3. Camera pipeline: sample, diff, crop, then OCR
 Loop: `requestAnimationFrame` preview, but a separate sampling timer (configurable, e.g. ~2–4 fps) draws the region-of-interest to an offscreen canvas. A cheap frame-difference check (downscaled luma hash / mean-absolute-difference) skips submission when the ROI is visually unchanged, so OCR only runs on candidate changes. The ROI is user-positioned in the MVP.
 - *Rationale:* OCR/translation are the expensive stages; gating them on visual change is the main lever for latency, CPU, and battery. Frame-diff before OCR complements text-level dedup after OCR.
+- *As built:* frame-diff gating proved unreliable with a handheld camera (hand shake and LCD flicker register as change; thresholds were hard to tune), so the live loop currently uses a **busy guard** instead: a new frame is sampled (every 500 ms) only after the previous recognition has finished. The frame-diff helper remains available but is not wired in; re-enabling it is tracked in tasks.
 
-### D4. Deduplication in two layers
-1. **Pre-OCR frame diff** (D3) avoids re-running OCR on a static screen.
-2. **Post-OCR text dedup** normalizes text (whitespace + punctuation), compares against a short recent-history buffer with fuzzy matching (e.g. normalized Levenshtein ratio threshold), and enforces a minimum repeat interval before the same line may be spoken again.
+### D4. Deduplication in layers
+1. **Pre-OCR gating** (D3) limits how often OCR runs (currently sampling + busy guard; frame diff optional).
+2. **Confidence filter + stability gate**: live readings below a minimum confidence (0.35) or shorter than 2 characters are dropped; a reading only passes after 3 consecutive similar reads (similarity ≥ 0.8) and is emitted once while it stays on screen. This absorbs per-frame OCR jitter before it reaches the pipeline.
+3. **Post-OCR text dedup** normalizes text (whitespace + punctuation), compares against a short recent-history buffer with fuzzy matching (e.g. normalized Levenshtein ratio threshold), and enforces a minimum repeat interval before the same line may be spoken again.
 - *Rationale:* OCR jitter produces slightly different strings for the same on-screen line; normalization + fuzzy match prevents re-translation/re-speech while genuinely new lines still pass.
 
 ### D5. Translation prompt/contract for natural RPG dialogue
@@ -61,6 +63,11 @@ A minimal API (`POST /api/translate`) implementing the same translation contract
 
 ### D9. Privacy modes as a first-class switch
 A single mode flag gates all network egress. Local mode: OCR/translation/TTS resolve to on-device (MVP: manual/mock/Web Speech; future: local models) and no fetch to translation endpoints occurs. Cloud mode: shows a disclosure before first remote request. Default to the most private mode that can produce output.
+
+### D10. On-device OCR baseline: Tesseract.js with screen-text preprocessing
+`TesseractOcrService` runs Tesseract.js (`jpn`, WASM) in a worker that is lazy-loaded on first recognition and reused. Page segmentation mode 3 (auto) handles a dialogue block surrounded by empty space. Because Japanese has no word spaces, all whitespace Tesseract inserts is stripped; confidence is mapped to 0..1. Before recognition the ROI is preprocessed: upscaled toward ~384 px height (1–4×), converted to grayscale, contrast-stretched between the 5th and 95th luminance percentiles, and inverted when the region is mostly dark, so the engine always sees dark text on a light background. This suppresses LCD moiré/colour noise and markedly improves recognition of game fonts. A collapsible debug panel shows the raw reading, confidence, and preprocessed image for on-device tuning. Live OCR runs in the camera loop, which hands settled text to the pipeline via `processText` (the same entry point used by manual input).
+- *Alternative considered:* PaddleOCR / manga-ocr via ONNX Runtime Web — likely more accurate on stylized fonts but much heavier; remains the Phase 5 candidate behind the same contract.
+- *Note:* the iPhone only grants camera access over HTTPS, so the dev server runs with a self-signed certificate on the LAN.
 
 ### Model evaluation strategy
 On-device models are **not** selected in this change; the design commits to evaluating candidates against iPhone-real constraints (size, RAM, startup, latency, power, JA accuracy, license, offline) before Phase 5. Candidates to benchmark, per stage:
@@ -90,6 +97,8 @@ Do not select on benchmark accuracy alone; the deliverable of the evaluation is 
 - **iOS audio autoplay restrictions** → one-time user-gesture unlock; expose explicit replay control.
 - **Web Speech voice quality/availability varies** → abstraction allows neural TTS later; voice selection exposed where supported.
 - **Frame-diff false negatives (missed new line) or false positives (re-processing)** → thresholds are configurable and covered by unit tests; tune during Phase 3.
+- **Tesseract.js fetches its worker, WASM core, and `jpn` language data from a CDN on first use** → in Local mode this is network egress (no camera data, but still a request) and OCR fails offline; bundle and cache these assets with the app.
+- **Tesseract accuracy on stylized/pixel game fonts is limited** → preprocessing + stability gate mitigate; keep the contract so a stronger OCR model can replace it.
 - **Bundle/model size on mobile networks** → keep MVP dependencies minimal; models are lazy-loaded and cached only in later phases.
 
 ## Migration Plan

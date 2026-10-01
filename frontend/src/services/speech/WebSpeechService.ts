@@ -17,8 +17,17 @@ export class WebSpeechService implements SpeechService {
   private voiceId: string | null = null;
   private lastSpoken: string | null = null;
   private unlocked = false;
+  /**
+   * Strong reference to the utterance being spoken: some engines garbage
+   * collect it mid-speech and then never fire onend, stalling the queue.
+   */
+  private current: SpeechSynthesisUtterance | null = null;
 
-  constructor(synth: SpeechSynthesis = window.speechSynthesis) {
+  constructor(
+    synth: SpeechSynthesis = window.speechSynthesis,
+    /** Optional diagnostics sink (e.g. the on-screen debug panel). */
+    private readonly log: (message: string) => void = () => undefined,
+  ) {
     this.synth = synth;
     this.queue = new SpeechQueue((text) => this.utter(text));
   }
@@ -36,9 +45,12 @@ export class WebSpeechService implements SpeechService {
   unlock(): void {
     if (this.unlocked) return;
     this.unlocked = true;
-    const u = new SpeechSynthesisUtterance('');
+    // WebKit may ignore an empty utterance, which would leave audio locked.
+    const u = new SpeechSynthesisUtterance(' ');
     u.volume = 0;
+    this.synth.resume?.();
     this.synth.speak(u);
+    this.log('speech: unlocked');
   }
 
   speak(english: string, options?: SpeechOptions): void {
@@ -85,9 +97,34 @@ export class WebSpeechService implements SpeechService {
         .getVoices()
         .find((v) => v.voiceURI === this.voiceId);
       if (voice) u.voice = voice;
-      u.onend = () => resolve();
-      u.onerror = () => resolve();
+
+      let settled = false;
+      const finish = (message: string) => {
+        if (settled) return;
+        settled = true;
+        clearTimeout(watchdog);
+        if (this.current === u) this.current = null;
+        this.log(message);
+        resolve();
+      };
+      // If the engine never reports the end, move on rather than stall forever.
+      const watchdog = setTimeout(
+        () => finish(`speech: no end event, skipped "${text}"`),
+        maxSpeechMs(text, this.rate),
+      );
+      u.onstart = () => this.log(`speech: speaking "${text}"`);
+      u.onend = () => finish('speech: done');
+      u.onerror = (e) => finish(`speech: error ${(e as { error?: string }).error ?? ''}`.trim());
+
+      this.current = u;
+      // Safari can stay paused after the app was backgrounded.
+      this.synth.resume?.();
       this.synth.speak(u);
     });
   }
+}
+
+/** Generous upper bound for how long speaking `text` can take. */
+function maxSpeechMs(text: string, rate: number): number {
+  return 5000 + (text.length * 120) / Math.max(0.5, rate);
 }

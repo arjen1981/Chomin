@@ -20,7 +20,7 @@ export function meanAbsDiff(a: ImageLike, b: ImageLike): number {
 export function hasChanged(
   previous: ImageLike | null,
   current: ImageLike,
-  threshold = 6,
+  threshold = 14,
 ): boolean {
   if (!previous) return true;
   return meanAbsDiff(previous, current) >= threshold;

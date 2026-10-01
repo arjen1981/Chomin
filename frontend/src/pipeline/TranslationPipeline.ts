@@ -1,4 +1,9 @@
-import type { CapturedRegion, DialogueLine, ProcessingState } from '../core/types';
+import type {
+  CapturedRegion,
+  DialogueLine,
+  OcrResult,
+  ProcessingState,
+} from '../core/types';
 import { Deduplicator } from '../core/dedup';
 import { RollingContextBuffer } from '../core/context';
 import type { AppServices } from '../services/factory';
@@ -51,6 +56,19 @@ export class TranslationPipeline {
     return () => this.dialogueListeners.delete(listener);
   }
 
+  /**
+   * Run OCR only, exposing the `recognizing` state. Used by the live camera
+   * loop, which filters readings before handing settled text to processText.
+   */
+  async recognize(region: CapturedRegion): Promise<OcrResult> {
+    this.setState('recognizing');
+    try {
+      return await this.services.ocr.recognize(region);
+    } finally {
+      this.setState('idle');
+    }
+  }
+
   /** Run one captured region through the full pipeline. */
   async processRegion(
     region: CapturedRegion,
@@ -59,6 +77,18 @@ export class TranslationPipeline {
     this.setState('recognizing');
     const { text: japanese } = await this.services.ocr.recognize(region);
 
+    if (japanese.trim() === '') {
+      this.setState('idle');
+      return { status: 'empty' };
+    }
+    return this.processText(japanese, now);
+  }
+
+  /** Process already-recognized text (e.g. manual input), skipping OCR. */
+  async processText(
+    japanese: string,
+    now: number = Date.now(),
+  ): Promise<PipelineOutcome> {
     if (japanese.trim() === '') {
       this.setState('idle');
       return { status: 'empty' };

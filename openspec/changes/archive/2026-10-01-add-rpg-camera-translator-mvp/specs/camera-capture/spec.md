@@ -27,7 +27,12 @@ The system SHALL sample frames for processing at a configurable interval rather 
 #### Scenario: Controlled sampling rate
 
 - **WHEN** the camera preview is running
-- **THEN** frames are submitted to downstream processing no faster than the configured sampling interval, and previews remain smooth regardless of processing rate
+- **THEN** frames are submitted to downstream processing no faster than the configured sampling interval (default 500 ms), and previews remain smooth regardless of processing rate
+
+#### Scenario: No overlapping recognition
+
+- **WHEN** a recognition of a previously sampled frame is still in progress
+- **THEN** no new frame is submitted until that recognition has finished
 
 #### Scenario: Skip redundant frames
 
